@@ -8,6 +8,8 @@ const socket = io("http://localhost:3001");
 
 export default function HomeScreen() {
   const [drawings, setDrawings] = useState([]);
+  const [cursors, setCursors] = useState({});
+  const [localCursor, setLocalCursor] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     // Listen for initial drawings

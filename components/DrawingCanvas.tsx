@@ -70,11 +70,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ socket }) => {
     });
 
     return () => {
-      socket.off("update-cursors");
-      socket.off("initial-drawings");
-      socket.off("new-drawing");
-      socket.off("move-cursor");
-      socket.off("add-drawing");
+      socket.emit("disconnect");
     };
   }, []);
 

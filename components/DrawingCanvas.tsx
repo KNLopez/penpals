@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { PanResponder, View } from "react-native";
 import Svg, { Circle, Path } from "react-native-svg";
-import { io } from "socket.io-client";
-
-const socket = io("http://localhost:3001");
+import { Socket } from "socket.io-client";
 
 interface Drawing {
   type: "path";
@@ -15,25 +13,28 @@ interface Position {
   y: number;
 }
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({}) => {
-  const [drawings, setDrawings] = useState([]);
+interface DrawingCanvasProps {
+  socket: Socket;
+}
+
+const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ socket }) => {
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
   const [currentPath, setCurrentPath] = useState("");
-  const [localCursor, setLocalCursor] = useState<Position>({ x: 0, y: 0 });
+  const [localCursor, setLocalCursor] = useState<Position | null>(null);
   const [cursors, setCursors] = useState<Record<string, Position>>({});
-  const [socketId, setSocketId] = useState<string>("");
+
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
     onPanResponderGrant: (event, gestureState) => {
       const { x0, y0 } = gestureState;
       setCurrentPath(`M${x0},${y0}`);
+      handleCursorMove({ x: x0, y: y0 });
     },
     onPanResponderMove: (event, gestureState) => {
       const { moveX, moveY } = gestureState;
       setCurrentPath((prev) => `${prev} L${moveX},${moveY}`);
-      const newPosition = { x: moveX, y: moveY };
-      setLocalCursor(newPosition);
-      socket.emit("move-cursor", newPosition); //
+      handleCursorMove({ x: moveX, y: moveY });
       handleAddDrawing({ type: "path", data: currentPath });
     },
     onPanResponderRelease: () => {
@@ -41,14 +42,17 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({}) => {
     },
   });
 
-  const handleAddDrawing = (drawing) => {
+  const handleCursorMove = (newPosition: Position) => {
+    setLocalCursor(newPosition);
+    socket.emit("move-cursor", newPosition);
+  };
+
+  const handleAddDrawing = (drawing: Drawing) => {
     // Send new drawing to the server
     socket.emit("add-drawing", drawing);
   };
 
   useEffect(() => {
-    setSocketId(socket.id);
-
     socket.on("initial-drawings", (initialDrawings) => {
       setDrawings(initialDrawings);
     });
@@ -67,8 +71,18 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({}) => {
 
     return () => {
       socket.off("update-cursors");
+      socket.off("initial-drawings");
+      socket.off("new-drawing");
+      socket.off("move-cursor");
+      socket.off("add-drawing");
     };
   }, []);
+
+  const otherCursors = Object.fromEntries(
+    Object.entries(cursors).filter(([id]) => id !== socket.id)
+  );
+
+  console.log(otherCursors, socket.id);
 
   return (
     <View style={{ flex: 1 }} {...panResponder.panHandlers}>
@@ -83,7 +97,7 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({}) => {
           return null;
         })}
         {currentPath && <Path d={currentPath} stroke="black" fill="none" />}
-        {Object.entries(cursors).map(
+        {Object.entries(otherCursors).map(
           ([userId, position]: [string, Position]) => (
             <Circle
               key={userId}
@@ -94,7 +108,9 @@ const DrawingCanvas: React.FC<DrawingCanvasProps> = ({}) => {
             />
           )
         )}
-        <Circle cx={localCursor.x} cy={localCursor.y} r={10} fill="blue" />
+        {localCursor && (
+          <Circle cx={localCursor.x} cy={localCursor.y} r={10} fill="blue" />
+        )}
       </Svg>
     </View>
   );

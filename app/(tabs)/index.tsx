@@ -8,7 +8,7 @@ const socket = io("http://localhost:3001");
 export default function HomeScreen() {
   return (
     <View style={styles.container}>
-      <DrawingCanvas />
+      <DrawingCanvas socket={socket} />
     </View>
   );
 }
